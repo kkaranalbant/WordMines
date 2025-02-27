@@ -20,6 +20,7 @@ public class ComponentConfig {
     public ComponentConfig (UserDetailsService userDetailsService) {
         this.userDetailsService = userDetailsService ;
     }
+
     @Bean
     public AuthenticationProvider authenticationProvider () {
         DaoAuthenticationProvider aProvider = new DaoAuthenticationProvider() ;

@@ -5,6 +5,8 @@ import com.kaan.Blog.repo.TokenRepo;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,82 +19,99 @@ import javax.crypto.SecretKey;
 public class JwtService {
 
     @Value("${jwt.secret}")
-    private String secret ;
+    private String secret;
 
     @Value("${jwt.expiration}")
-    private String expiration ;
+    private String expiration;
 
-    private UserService userService ;
+    private UserService userService;
 
-    private TokenRepo tokenRepo ;
+    private TokenRepo tokenRepo;
 
-    public JwtService(UserService userService , TokenRepo tokenRepo) {
+    public JwtService(UserService userService, TokenRepo tokenRepo) {
         this.userService = userService;
-        this.tokenRepo = tokenRepo ;
+        this.tokenRepo = tokenRepo;
     }
 
-    private byte [] decodeSecret (){
-        return Decoders.BASE64.decode(secret) ;
+    private byte[] decodeSecret() {
+        return Decoders.BASE64.decode(secret);
     }
 
-    private SecretKey getSecretKey () {
-        return Keys.hmacShaKeyFor(decodeSecret()) ;
+    private SecretKey getSecretKey() {
+        return Keys.hmacShaKeyFor(decodeSecret());
     }
 
-    private JwtParser getParser () {
-        return Jwts.parser().setSigningKey(getSecretKey()).build() ;
+    private JwtParser getParser() {
+        return Jwts.parser().setSigningKey(getSecretKey()).build();
     }
 
-    public String createJwt (Long userId , String username) {
-        Map<String , Long> idClaim = new HashMap<>() ;
-        idClaim.put("id",userId) ;
-        String jwt = Jwts.builder().claims(idClaim)
+    public String createJwt(Long userId, String username) {
+        Map<String, Long> idClaim = new HashMap<>();
+        idClaim.put("id", userId);
+        String jwt = Jwts.builder().signWith(getSecretKey()).claims(idClaim)
                 .subject(username)
                 .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + expiration))
-                .compact() ;
-        Token token = new Token() ;
+                .expiration(new Date(System.currentTimeMillis() + Long.parseLong(expiration)))
+                .compact();
+        Token token = new Token();
         token.setJwt(jwt);
         token.setUser(userService.getUserById(userId));
         token.setEnabled(true);
-        tokenRepo.save(token) ;
-        return jwt ;
+        tokenRepo.save(token);
+        return jwt;
     }
 
-    public String refresh (String jwt) {
-        Claims claims = extractClaims(jwt) ;
-        Long userId = Long.parseLong(String.valueOf(claims.get("id"))) ;
+    public String refresh(String jwt) {
+        Claims claims = extractClaims(jwt);
+        Long userId = Long.parseLong(String.valueOf(claims.get("id")));
         String username = claims.getSubject();
-        String newJwt = createJwt(userId , username) ;
-        Optional<Token> tokenOptional = tokenRepo.findByJwt(jwt) ;
+        String newJwt = createJwt(userId, username);
+        Optional<Token> tokenOptional = tokenRepo.findByJwt(jwt);
         if (tokenOptional.isPresent()) {
             tokenOptional.get().setEnabled(false);
-            tokenRepo.save(tokenOptional.get()) ;
+            tokenRepo.save(tokenOptional.get());
         }
-        return newJwt ;
+        return newJwt;
     }
 
-    private Claims extractClaims (String jwt) {
-        Claims claims = null ;
+    private Claims extractClaims(String jwt) {
+        Claims claims = null;
         try {
-            claims = getParser().parseSignedClaims(jwt).getPayload() ;
+            claims = getParser().parseSignedClaims(jwt).getPayload();
+        } catch (ExpiredJwtException ex) {
+            claims = ex.getClaims();
         }
-        catch (ExpiredJwtException ex) {
-            claims = ex.getClaims() ;
-        }
-        return claims ;
+        return claims;
     }
 
-    public void validate (String jwt) throws JwtException , com.kaan.Blog.exception.JwtException {
-        Optional<Token> tokenOptional = tokenRepo.findByJwt(jwt) ;
+    public void validate(String jwt) throws JwtException, com.kaan.Blog.exception.JwtException {
+        Optional<Token> tokenOptional = tokenRepo.findByJwt(jwt);
         if (tokenOptional.isEmpty()) throw new com.kaan.Blog.exception.JwtException("Jwt Not Found !");
-        getParser().parse(jwt) ;
+        getParser().parse(jwt);
     }
 
-    public Token getByUserId (Long userId) {
-        return tokenRepo.findByUserId(userId).orElse(null) ;
+    public Token getByUserId(Long userId) {
+        List<Token> tokens = tokenRepo.findAllByUserId(userId);
+        for (Token token : tokens) {
+            if (token.isEnabled()) return token;
+        }
+        return null;
     }
 
+    public UserDetails getUserDetailsByToken(String token) {
+        Claims claims = extractClaims(token);
+        String username = claims.getSubject();
+        return userService.loadUserByUsername(username);
+    }
+
+    public Long getUserIdByEncodedToken(String encodedJwt) throws JwtException {
+        if (encodedJwt == null) throw new JwtException("Invalid JWT");
+        if (!encodedJwt.startsWith("Bearer+")) throw new JwtException("Invalid JWT");
+        String parsedJwt = encodedJwt.substring(7);
+        Claims claims = extractClaims(parsedJwt);
+        String username = claims.getSubject();
+        return userService.getUserIdByUsername(username);
+    }
 
 
 }

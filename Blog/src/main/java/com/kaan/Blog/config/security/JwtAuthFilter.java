@@ -1,6 +1,7 @@
 package com.kaan.Blog.config.security;
 
 import com.kaan.Blog.service.JwtService;
+import com.kaan.Blog.service.UserService;
 import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -20,38 +21,43 @@ import java.io.IOException;
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
-    private JwtService jwtService ;
+    private JwtService jwtService;
 
-    public JwtAuthFilter(JwtService jwtService ) {
+
+    public JwtAuthFilter(JwtService jwtService) {
         this.jwtService = jwtService;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        Cookie [] cookies = request.getCookies() ;
-        String encryptedJwt = null ;
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            filterChain.doFilter(request,response);
+            return ;
+        }
+        String encryptedJwt = null;
         for (Cookie cookie : cookies) {
             if (cookie.getName().equals("Authorization") && cookie.getValue().startsWith("Bearer+")) {
-                encryptedJwt = cookie.getValue().substring(7) ;
-                break ;
+                encryptedJwt = cookie.getValue().substring(7);
+                break;
             }
         }
         if (encryptedJwt == null) {
-            filterChain.doFilter(request,response);
+            filterChain.doFilter(request, response);
+            return ;
         }
 
         try {
-            jwtService.validate(encryptedJwt) ;
+            jwtService.validate(encryptedJwt);
+        } catch (ExpiredJwtException ex) {
+            encryptedJwt = jwtService.refresh(encryptedJwt);
         }
-        catch (ExpiredJwtException ex) {
-            encryptedJwt = jwtService.refresh(encryptedJwt) ;
-        }
-        UserDetails user = jwtService.getUser(encryptedJwt) ;
+        UserDetails user = jwtService.getUserDetailsByToken(encryptedJwt);
         if (SecurityContextHolder.getContext().getAuthentication() == null) {
-            UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(user , null , user.getAuthorities()) ;
+            UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
             authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authenticationToken);
         }
-        filterChain.doFilter(request,response);
+        filterChain.doFilter(request, response);
     }
 }

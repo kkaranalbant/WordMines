@@ -1,6 +1,7 @@
 package com.kaan.Blog.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
@@ -9,41 +10,45 @@ import java.util.Collection;
 import java.util.List;
 
 @Entity
-@Table(name = "users" , uniqueConstraints = @UniqueConstraint(columnNames = {"name" , "lastname"}))
+@Table(name = "users", uniqueConstraints = @UniqueConstraint(columnNames = {"name", "lastname"}))
 public class User extends BaseModel implements UserDetails {
 
-    @Column(unique = true , nullable = false)
-    private String username ;
+    @Column(unique = true, nullable = false)
+    private String username;
 
     @Column(nullable = false)
-    private String password ;
+    private String password;
 
     @Column(nullable = false)
-    private String name ;
+    private String name;
 
     @Column(nullable = false)
-    private String lastname ;
+    private String lastname;
 
     @Column(nullable = false)
-    private LocalDate birthDate ;
+    private LocalDate birthDate;
 
     @Column(nullable = true)
-    private byte [] image ;
+    private byte[] image;
 
     @Column(nullable = false)
-    private boolean isEnabled ;
+    @Email
+    private String email;
 
     @Column(nullable = false)
-    private boolean isAccountNonLocked ;
+    private boolean isEnabled;
 
     @Column(nullable = false)
-    private boolean isAccountNonExpired ;
+    private boolean isAccountNonLocked;
 
     @Column(nullable = false)
-    private boolean isCredentialsNonExpired ;
+    private boolean isAccountNonExpired;
+
+    @Column(nullable = false)
+    private boolean isCredentialsNonExpired;
 
     @Enumerated(EnumType.STRING)
-    private Role role ;
+    private Role role;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -134,5 +139,17 @@ public class User extends BaseModel implements UserDetails {
 
     public void setCredentialsNonExpired(boolean credentialsNonExpired) {
         isCredentialsNonExpired = credentialsNonExpired;
+    }
+
+    public void setRole(Role role) {
+        this.role = role;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 }
